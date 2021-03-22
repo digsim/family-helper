@@ -1,6 +1,6 @@
 
 import './App.css';
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer } from 'react'
 import Amplify, { API, graphqlOperation } from 'aws-amplify'
 import awsConfig from './aws-exports'
 import { AmplifyAuthenticator, AmplifySignOut } from '@aws-amplify/ui-react'
@@ -17,6 +17,7 @@ Amplify.configure(awsConfig)
 const initialState = {
   title: '',
   description: '',
+  lists: [],
   isModalOpen: false
 }
 function listReducer(state = initialState, action){
@@ -25,6 +26,8 @@ function listReducer(state = initialState, action){
       return {...state, description: action.value};
     case 'TITLE_CHANGED':
       return {...state, title: action.value};
+    case 'UPDATE_LISTS':
+      return {...state, lists: [...action.value, ...state.lists]}
     case 'OPEN_MODAL':
       return {...state, isModalOpen: true}
     case 'CLOSE_MODAL':
@@ -37,36 +40,28 @@ function listReducer(state = initialState, action){
 
 function App() {
   const [state, dispatch] = useReducer(listReducer, initialState);
-  const [list, setList] = useState([]);
-  const [newList, setNewList] = useState('');
+
   async function fetchList() {
     const { data } = await API.graphql(graphqlOperation(listLists));
-    setList(data.listLists.items)
-    console.log(data);
+    dispatch({type: 'UPDATE_LISTS', value: data.listLists.items});
   }
+
   useEffect(() => {
     fetchList()
   }, []);
-
-  function addToList({data}){
-    setNewList(data.onCreateList);
-  }
-  useEffect(() => {
-    if(newList !== ''){
-      setList([newList, ...list]);
-    }
-  }, [newList]);
 
   useEffect(() => {
     let subscription = 
     API
     .graphql(graphqlOperation(onCreateList))
     .subscribe({
-      next: ({provider, value}) => addToList(value)
+      next: ({provider, value}) => {
+        console.log(value);
+        dispatch({type: 'UPDATE_LISTS', value: [value.data.onCreateList]});
+      },
     });
+    return () => subscription.unsubscribe();
   }, []);
-
-
 
   async function saveList(){
     const {title, description} = state;
@@ -74,6 +69,12 @@ function App() {
     dispatch({type: 'CLOSE_MODAL'});
     console.log('Save data with result: ', result)
   }
+
+  
+
+
+
+  
   return (
     <AmplifyAuthenticator>
 
@@ -84,7 +85,7 @@ function App() {
         </Button>
         <div className="App">
           <MainHeader />
-          <Lists list={list} />
+          <Lists list={state.lists} />
         </div>
       </Container>
 
